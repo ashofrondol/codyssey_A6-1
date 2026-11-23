@@ -11,6 +11,7 @@
 - [최종 결과물](#최종-결과물)
 - [프로젝트 구조](#프로젝트-구조)
 - [개발 환경과 제약 사항](#개발-환경과-제약-사항)
+- [데이터셋 후보](#데이터셋-후보)
 - [실행 방법](#실행-방법)
 - [할 일](#할-일)
 - [보너스 과제](#보너스-과제)
@@ -88,6 +89,7 @@ codyssey_A6-1/
 ├── train_mnist.py              # (예정) MNIST 분류 검증 (데이터 로더 직접 구현)
 ├── experiment_init.py          # (예정) 초기화 비교 실험
 ├── figures/                    # (예정) 초기화 비교 Loss 그래프
+├── data/                       # (예정) 내려받은 MNIST 등 원본 데이터. 용량과 라이선스 때문에 git에서 제외
 ├── requirements.txt            # (예정) 의존성 목록
 ├── docs/
 │   └── A6-1.pdf                # 과제 명세
@@ -110,6 +112,65 @@ codyssey_A6-1/
 
 - 외부 데이터셋(MNIST 등)을 쓸 때는 바이너리(UBYTE) 또는 CSV를 직접 파싱해 NumPy로 로드한다. 다운로드에는 requests/urllib/gzip 사용을 허용한다.
 - 명세의 데이터셋 가이드는 학습 로직을 빠르게 확인하는 용도로 Scikit-learn의 `load_digits()`(MNIST 소형판), `make_moons()`(비선형 분류용)를 권장하며, 이때도 데이터를 NumPy 배열로 변환해 사용하는 과정을 반드시 거치도록 한다.
+
+## 데이터셋 후보
+
+명세의 데이터 조건을 채울 수 있는 공개 데이터셋을 조사한 결과다(2026-11-23 기준). 라이선스는 "확인"이라고 적은 것만 원문 페이지에서 직접 확인했다.
+
+**명세가 데이터에 요구하는 것**
+
+| 필요한 것 | 어디서 필요한가 |
+|---|---|
+| XOR 데이터 (입력 4개와 정답) | 할 일 4 (XOR 문제 해결, Zero Init 실패 재현) |
+| MNIST (손글씨 숫자 28×28, 10종) | 할 일 4 (1 Epoch 정확도 80% 이상), 최종 결과물 `train_mnist.py` |
+| 바이너리(UBYTE) 또는 CSV 원본을 직접 파싱해 NumPy로 로드 | 제약 사항 |
+| 다운로드는 requests/urllib/gzip만 허용, 자동 로더(`torch.utils.data` 등) 금지 | 제약 사항 |
+| 기울기 검증용 작은 입력 | 할 일 2 (데이터셋이 아니라 NumPy 난수로 만든다) |
+| (권장) `load_digits()`, `make_moons()` | 명세 데이터셋 가이드 |
+
+### 먼저 확인할 것: 과정에서 주는 파일과 Scikit-learn 허용 여부
+
+명세에는 과정이 데이터 파일을 직접 제공한다는 말이 없다. 데이터셋 가이드는 "별첨 문서나 Appendix 형태로 제공할 수 있는" 안내일 뿐이다. 그래서 두 가지를 운영진에게 먼저 확인한다.
+
+- MNIST 파일을 과정에서 따로 나눠 주는지. 주면 그 파일이 가장 확실하다.
+- "NumPy만 사용" 제약 아래에서 Scikit-learn의 `load_digits()`, `make_moons()`를 데이터 준비에 써도 되는지([명세에서 확인할 점](#명세에서-확인할-점) 참고). 허용되지 않아도 아래 방법으로 같은 데이터를 NumPy만으로 만들 수 있다.
+
+### 추천: MNIST 원본 UBYTE 파일 (미러에서 받기)
+
+| 요구사항 | 해결 방법 |
+|---|---|
+| MNIST 분류 | MNIST 원본 4개 파일(학습 이미지·라벨 60,000개, 테스트 이미지·라벨 10,000개)을 쓴다 |
+| UBYTE 직접 파싱 | `gzip`으로 압축을 풀고, 앞부분 헤더(매직 넘버, 개수, 행·열 크기)를 읽은 뒤 나머지 바이트를 `np.frombuffer(..., dtype=np.uint8)`로 읽어 `(개수, 28, 28)` 모양으로 바꾼다 |
+| 다운로드 도구 제한 | `urllib.request.urlretrieve`로 받는다. 파일이 이미 있으면 다시 받지 않게 한다 |
+| 1 Epoch 80% | 픽셀 값을 255로 나눠 0~1로 맞추면 작은 MLP로도 도달할 수 있는 수준이다(구현 후 확인) |
+
+**받을 곳**: 공식 페이지 `yann.lecun.com/exdb/mnist/`는 2026-11-23에 확인했을 때 파일이 하나도 없는 빈 폴더 목록만 보였고, 파일 주소(`train-images-idx3-ubyte.gz`)는 404를 돌려줬다. 대신 Torchvision이 예비 주소로 쓰는 `https://ossci-datasets.s3.amazonaws.com/mnist/`에서 4개 파일이 모두 내려받기 가능한 상태였다(크기: 학습 이미지 9,912,422바이트, 학습 라벨 28,881바이트, 테스트 이미지 1,648,877바이트, 테스트 라벨 4,542바이트, 모두 gzip 압축).
+
+**라이선스: 불명확**. 공식 페이지가 비어 있어 원문에서 라이선스를 확인할 수 없었다. 2차 출처끼리도 말이 다르다. Hugging Face의 [ylecun/mnist](https://huggingface.co/datasets/ylecun/mnist) 카드는 MIT라고 적고, 일부 교재와 미러는 CC BY-SA 3.0, CC0 등을 적는다. 그래서 파일을 레포에 올리지 않고, 출처(LeCun, Cortes, Burges의 MNIST database)만 밝힌다.
+
+**보조 추천: [Fashion-MNIST](https://github.com/zalandoresearch/fashion-mnist)** (MIT, 확인). MNIST와 파일 형식(gzip된 IDX ubyte)과 크기(28×28 흑백, 60,000 + 10,000장, 10종)가 똑같아서 **같은 로더를 그대로 쓸 수 있다.** 라이선스가 분명하고, MNIST보다 어려워서 초기화 실험을 한 번 더 해 보기에 좋다. 다만 명세는 MNIST를 지명했으므로 MNIST를 대신하는 것이 아니라 추가 실험용이다.
+
+### 후보 전체 비교
+
+| 데이터셋 | 라이선스 | 규모·형식 | 판단 |
+|---|---|---|---|
+| XOR (직접 만들기) | - | 입력 4개 `[[0,0],[0,1],[1,0],[1,1]]`, 정답 `[0,1,1,0]` | **XOR 실험용**. 데이터셋을 받을 필요 없이 NumPy 배열로 직접 적는다 |
+| [MNIST (ossci-datasets 미러)](https://ossci-datasets.s3.amazonaws.com/mnist/train-images-idx3-ubyte.gz) | 불명확 | gzip IDX ubyte 4개, 합계 약 11.6MB | **MNIST 1순위**. 명세의 "UBYTE 직접 파싱"과 그대로 맞는다 |
+| [MNIST (Google Cloud cvdf-datasets 미러)](https://storage.googleapis.com/cvdf-datasets/mnist/train-images-idx3-ubyte.gz) | 불명확 | 위와 같은 4개 파일 | 위 미러가 안 될 때의 예비 주소. 2026-11-23에 응답(200)을 확인했다 |
+| [MNIST (Hugging Face ylecun/mnist)](https://huggingface.co/datasets/ylecun/mnist) | MIT (Hugging Face 카드 기준, 원문 미확인) | Parquet, 이미지는 PNG, 18.2MB | Parquet과 PNG를 읽으려면 별도 라이브러리가 필요해 "UBYTE 또는 CSV 직접 파싱" 조건에 맞지 않는다 |
+| [Fashion-MNIST](https://github.com/zalandoresearch/fashion-mnist) | MIT (확인) | gzip IDX ubyte 4개 (26MB, 29KB, 4.3MB, 5.1KB) | **추가 실험용 1순위**. MNIST 로더를 그대로 쓴다 |
+| [UCI Optical Recognition of Handwritten Digits](https://archive.ics.uci.edu/dataset/80/optical+recognition+of+handwritten+digits) | CC BY 4.0 (확인) | 5,620개(학습 `optdigits.tra` 3,823개 + 테스트 `optdigits.tes` 1,797개), 8×8 이미지를 0~16 정수 64개로 적은 텍스트, zip 577.4KB | `load_digits()`를 쓰지 않고 같은 데이터를 텍스트 파싱으로 읽고 싶을 때. 한 줄이 숫자 65개(픽셀 64개 + 라벨)다. 구분 문자는 파일을 열어 확인한다 |
+| [Scikit-learn `load_digits()`](https://scikit-learn.org/stable/datasets/toy_dataset.html) | 데이터 라이선스는 문서에 없음. 원본은 위 UCI 데이터(CC BY 4.0) | 1,797개, 8×8 | Scikit-learn 문서에 따르면 위 UCI 데이터의 **테스트 셋 사본**이다. 빠른 확인용으로 명세가 권장하지만, MNIST(28×28, 70,000장)를 대신할 수는 없다 |
+| Scikit-learn `make_moons()` | - (그때그때 만드는 합성 데이터) | 원하는 개수 | 비선형 분류 확인용. 반달 두 개를 만드는 공식이 간단해서 `np.cos`, `np.sin`과 난수 잡음으로 NumPy만으로도 만들 수 있다 |
+| [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) | 명시 없음 (원문 페이지에 라이선스가 없고 기술 보고서 인용만 요청) | 32×32 컬러 60,000장, 바이너리 버전 162MB | 바이너리 형식이 단순해 직접 파싱은 쉽지만, 완전연결 신경망으로 1 Epoch 80%는 기대하기 어렵다. 이 과제에는 맞지 않는다 |
+
+### 데이터를 다룰 때 주의할 점
+
+- **데이터 파일은 레포에 올리지 않는다.** `data/` 폴더에 받아 두고 `.gitignore`로 제외한다. MNIST는 라이선스가 불명확하므로 더욱 그렇다. README에는 받는 주소와 출처만 적는다.
+- **출처 표기**: Fashion-MNIST는 MIT 라이선스라 저작권 문구(Zalando SE)와 라이선스를 밝힌다. UCI 데이터는 CC BY 4.0이라 출처를 적는다. 예: `Alpaydin, E. & Kaynak, C. (1998). Optical Recognition of Handwritten Digits [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C50P49`
+- **파일이 제대로 받아졌는지 확인한다.** 미러는 언제든 바뀔 수 있다. 파일 크기나 헤더의 매직 넘버(이미지 2051, 라벨 2049)와 개수(60,000, 10,000)를 읽어 맞는지 검사하는 코드를 로더에 넣는다. Fashion-MNIST 저장소는 파일별 MD5도 알려 준다.
+- **바이트 순서**: IDX 헤더의 정수는 큰 자리부터 적는 방식(big-endian)이다. `np.frombuffer(..., dtype=">i4")`처럼 순서를 지정해서 읽어야 엉뚱한 숫자가 나오지 않는다.
+- **`load_digits()`를 쓴다면**: 명세 안내대로 받은 즉시 NumPy 배열로 바꾸고, 이후 학습 코드는 Scikit-learn에 의존하지 않게 한다.
 
 ## 실행 방법
 
@@ -250,3 +311,4 @@ All gradient checks passed! Maximum difference: 2.3e-08 < 1e-07 ✓
 
 - 과제 명세: [docs/A6-1.pdf](docs/A6-1.pdf)
 - 명세 데이터셋 가이드: Scikit-learn `load_digits()`, `make_moons()`, Torchvision/Keras의 MNIST, CIFAR-10, Fashion-MNIST
+- 데이터셋 후보와 라이선스: 위 [데이터셋 후보](#데이터셋-후보) 절. 실제로 사용한 데이터의 출처와 라이선스를 여기에 적는다.
